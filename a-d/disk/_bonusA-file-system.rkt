@@ -16,7 +16,8 @@
   (export format! new-block delete-block delete-chain!
           write-meta-block! read-meta-block directory
           next-bptr next-bptr! null-block? null-block filename-size
-          mk ls rm whereis df)
+          mk ls rm whereis df
+          number-of-files)
   (import (scheme base)
           (prefix (a-d disk config) disk:)
           (a-d file constants))
@@ -243,4 +244,19 @@
                   ((string=? name (dir-name blck slot))
                    (dir-bptr blck slot))
                   (else
-                   (traverse-dir blck (+ slot 1)))))))))
+                   (traverse-dir blck (+ slot 1)))))))
+
+    (define (number-of-files disk)
+      (define meta (read-meta-block disk))
+      (define bptr (directory meta))
+
+      (if (null-block? bptr)
+          '()
+          (let traverse-dir ((blck (disk:read-block disk bptr))
+                             (slot 0)
+                             (count 0))
+            (cond ((at-end? blck slot) (if (has-next? blck)
+                                           (traverse-dir (disk:read-block disk (next-bptr blck)) 0 count)
+                                           count))
+                  ((empty-slot? blck slot) (traverse-dir blck (+ slot 1) count))
+                  (else                    (traverse-dir blck (+ slot 1) (+ count 1)))))))))
