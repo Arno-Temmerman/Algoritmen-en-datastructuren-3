@@ -79,34 +79,39 @@
       '()) ; default is to do nothing ; cached version does more
   
     (define-record-type block
-      (make-block d p b)
+      (make-block d p b dr)
       block?
       (d disk)
       (p position)
-      (b bytes))
+      (b bytes)
+      (dr dirty? dirty!))
 
     (define (write-block! blck) 
-      (define bptr (position blck))
-      (define data-byts (bytes blck))
-      (define port (open-output-file (name (disk blck)) #:exists 'update)) ; see https://docs.racket-lang.org/reference/file-ports.html#%28def._%28%28lib._racket%2Fprivate%2Fbase..rkt%29._open-output-file%29%29
-      (set-port-position! port (* bptr block-size))
-      (write-bytevector data-byts port)
-      (close-port port))
+      (if (dirty? blck)
+          (let ((bptr (position blck))
+                (data-byts (bytes blck))
+                (port (open-output-file (name (disk blck)) #:exists 'update)))
+            (set-port-position! port (* bptr block-size))
+            (write-bytevector data-byts port)
+            (close-port port)
+            (dirty! blck #f))))
  
     (define (read-block dsk bptr)
       (define port (open-input-file (name dsk)))
       (set-port-position! port (* bptr block-size))
       (let ((byts (read-bytevector block-size port)))
         (close-port port)
-        (make-block dsk bptr byts)))
+        (make-block dsk bptr byts #f)))
  
     (define (encode-byte! blck offs byte)
+      (dirty! block #t)
       (bytevector-u8-set! (bytes blck) offs byte))
  
     (define (decode-byte blck offs)
       (bytevector-u8-ref (bytes blck) offs))
  
     (define (encode-fixed-natural! blck offs size nmbr)
+      (dirty! block #t)
       (bytevector-uint-set! (bytes blck) offs nmbr 'big size))
  
     (define (decode-fixed-natural blck offs size)
@@ -114,6 +119,7 @@
  
     (define (encode-arbitrary-integer! blck offs nmbr)
       (define size (integer-bytes nmbr))
+      (dirty! block #t)
       (encode-byte! blck offs size)
       (bytevector-sint-set! (bytes blck) (+ offs 1) nmbr 'big size)
       (+ size 1))
@@ -125,9 +131,11 @@
  
     (define (encode-real! blck offs size nmbr)
       (cond ((= size real64)
+             (dirty! block #t)
              (bytevector-ieee-double-set! (bytes blck) offs nmbr 'big)
              size)
             ((= size real32)
+             (dirty! block #t)
              (bytevector-ieee-single-set! (bytes blck) offs nmbr 'big)
              size)
             (else
@@ -143,6 +151,7 @@
 
            
     (define (encode-string! blck offs size strg)
+      (dirty! block #t)
       (set! strg (string->utf8 strg))
       (do ((indx 0 (+ indx 1)))
         ((= indx size))
@@ -174,6 +183,7 @@
                             (decode-byte blck (+ blck-offs indx)))))
   
     (define (encode-bytes! blck byts blck-offs byts-offs size)
+      (dirty! block #t)
       (do ((indx 0 (+ indx 1)))
         ((= indx size))
         (encode-byte! blck
