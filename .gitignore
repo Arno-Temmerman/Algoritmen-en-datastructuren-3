@@ -18,6 +18,9 @@ bin/
 # or
 */bin/*
 
+# Ignore dirs named `compiled`
+compiled/
+
 # Unignore all `.jar` in `bin` dir
 !*/bin/*.jar
 
@@ -31,6 +34,7 @@ relative/path/to/dir/filename.extension
 relative/path/to/dir/anotherfile
 
 #common document extensions (case insensitive)
+**.[bB][aA][kK]
 **.[pP][dD][fF]
 **.[dD][oO][cC]
 **.[dD][oO][tT]
