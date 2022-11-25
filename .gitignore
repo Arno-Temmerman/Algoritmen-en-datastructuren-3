@@ -34,6 +34,7 @@ relative/path/to/dir/filename.extension
 relative/path/to/dir/anotherfile
 
 #common document extensions (case insensitive)
+**.1
 **.[bB][aA][kK]
 **.[pP][dD][fF]
 **.[dD][oO][cC]
