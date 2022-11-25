@@ -107,10 +107,31 @@
       (bytevector-u8-ref (bytes blck) offs))
  
     (define (encode-fixed-natural! blck offs size nmbr)
-      (bytevector-uint-set! (bytes blck) offs nmbr 'big size))
+      (define req-siz (natural-bytes nmbr))
+      (if (< size req-siz)
+          (error "Insufficiënt size provided to encode natural!")
+          (encode-big-endian! blck offs size nmbr)))
+
+    ; Big endian encoding
+    (define (encode-big-endian! blck offs size nmbr)
+      (define byts (bytes blck))
+      (let loop ((current nmbr)
+                 (i (+ offs size -1)))
+        (when (>= i offs)
+          (bytevector-u8-set! byts i (modulo current 256)) ; equivalent aan encode-byte!
+          (loop (quotient current 256) (- i 1)))))
  
     (define (decode-fixed-natural blck offs size)
-      (bytevector-uint-ref (bytes blck) offs 'big size))
+      (define byts (bytes blck))
+      (let loop ((nbr 0)
+                 (pow 1)
+                 (i (+ offs size -1)))
+        (if (< i offs)
+            nbr
+            (let ((byte (bytevector-u8-ref byts i))) ; equivalent aan decode-byte!
+              (loop (+ nbr (* pow byte))
+                    (* pow 256)
+                    (- i 1))))))
  
     (define (encode-arbitrary-integer! blck offs nmbr)
       (define size (integer-bytes nmbr))
