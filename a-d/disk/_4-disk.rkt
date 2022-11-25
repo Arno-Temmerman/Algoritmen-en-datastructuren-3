@@ -25,7 +25,8 @@
           integer-bytes natural-bytes
           decode-real encode-real! 
           decode-string encode-string!
-          decode-bytes encode-bytes!)
+          decode-bytes encode-bytes!
+          decode-fixed-integer encode-fixed-integer!)
   (import (scheme base)
           (scheme file)
           (scheme inexact)
@@ -180,5 +181,22 @@
                       (+ blck-offs indx)
                       (bytevector-u8-ref byts (+ byts-offs indx)))))
   
-    )
-  )
+    ; Two's complement
+    (define (encode-fixed-integer! blck offs size nmbr)
+      ; Sanity check
+      (define required (integer-bytes nmbr))
+      (if (< size required)
+          (error "Insufficient size provided to encode integer!"))
+
+      ; Echte encodering
+      (encode-fixed-natural! blck offs size (if (< nmbr 0)
+                                                (+ nmbr (expt 256 size)) ; negatieve getallen
+                                                nmbr)))                  ; positieve getallen
+      
+    ; Two's complement
+    (define (decode-fixed-integer blck offs size)
+      (define nmbr (decode-fixed-natural blck offs size))
+      (define sentinel (/ (expt 256 size) 2))
+      (if (< nmbr sentinel)
+          nmbr
+          (- nmbr (expt 256 size))))))
