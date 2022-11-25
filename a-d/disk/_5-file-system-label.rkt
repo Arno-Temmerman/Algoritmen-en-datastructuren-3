@@ -15,6 +15,7 @@
 (define-library (file-system)
   (export format! new-block delete-block delete-chain!
           write-meta-block! read-meta-block directory
+          label
           next-bptr next-bptr! null-block? null-block filename-size
           mk ls rm whereis df)
   (import (scheme base)
@@ -22,6 +23,7 @@
           (a-d file constants))
   (begin
  
+    (define label-size 10)
     (define filename-size     10)
     (define sentinel-filename (utf8-sentinel-for filename-size))
  
@@ -33,6 +35,8 @@
     (define freelist-offset  disk:block-ptr-size)       ; byte nr of the freelist pointer in the meta block
     (define available-offset (* 2 disk:block-ptr-size)) ; byte nr of the 'blocks available' count in the meta block
  
+    (define label-offset     (+ available-offset disk:block-ptr-size))
+    
     (define (directory meta)
       (disk:decode-fixed-natural  meta directory-offset disk:block-ptr-size))
     (define (directory! meta blck)
@@ -46,6 +50,11 @@
     (define (blocks-free! meta free)
       (disk:encode-fixed-natural! meta available-offset disk:block-ptr-size free))
  
+    (define (label meta)
+      (disk:decode-string  meta label-offset label-size))
+    (define (label! meta lbl)
+      (disk:encode-string! meta label-offset label-size lbl))
+     
     (define next-offset 0) 
     (define slot-size   (+ filename-size disk:block-ptr-size))
 
@@ -86,12 +95,14 @@
     (define (write-meta-block! meta)
       (disk:write-block! meta))
  
-    (define (format! disk)
+    (define (format! disk lbl)
       (define meta (read-meta-block disk))
       (directory!   meta null-block)
       (freelist!    meta (+ meta-bptr 1)) 
       (blocks-free! meta (- disk:disk-size 1)); the superblock itself is not free
+      (label!       meta lbl)
       (write-meta-block! meta)
+      
       (let high-level-format
         ((bptr (+ meta-bptr 1)))
         (let ((block (disk:read-block disk bptr)))
