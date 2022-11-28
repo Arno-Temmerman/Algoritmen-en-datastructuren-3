@@ -251,7 +251,7 @@
       (define bptr (directory meta))
 
       (if (null-block? bptr)
-          '()
+          0
           (let traverse-dir ((blck (disk:read-block disk bptr))
                              (slot 0)
                              (count 0))
