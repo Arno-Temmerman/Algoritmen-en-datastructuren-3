@@ -71,9 +71,28 @@
 
 ; Oefening 6, deel (b): Low level copy
 
-;;; TODO
+(define (low-level-copy disk file-name copy-name)
+  (let* ((first-copy-block (fs:new-block disk))
+         (first-copy-bptr  (disk:position first-copy-block)))
+    ; slot aanmaken in dir voor copy-file 
+    (fs:mk disk copy-name first-copy-bptr)
+  
+    (let loop ((file-block (disk:read-block disk (fs:whereis disk file-name)))
+               (copy-block first-copy-block))
+      (let ((byte-vector (make-bytevector disk:block-size 0)))
+        ; overgieten
+        (disk:decode-bytes  file-block byte-vector 0 0 disk:block-size)
+        (disk:encode-bytes! copy-block byte-vector 0 0 disk:block-size)
+
+        ; Is er nog een volgend block?
+        (if (not (fs:null-block? (fs:next-bptr file-block)))
+            (let ((next-copy-block (fs:new-block disk)))
+              (fs:next-bptr! copy-block (disk:position next-copy-block))
+              (disk:write-block! copy-block)
+              (loop (disk:read-block disk (fs:next-bptr file-block)) next-copy-block))
+            (disk:write-block! copy-block))))))
 
 (newline)
-;(define f3 (low-level-copy d "file2" "file3"))
-;(stat d "file3")
-;(cat d "file3") (newline)
+(define f3 (low-level-copy d "file2" "file3"))
+(stat d "file3")
+(cat d "file3") (newline)
