@@ -15,7 +15,8 @@
 (define-library (output-file)
   (export new sequential-file? delete! name disk
           header header! current current! buffer buffer!
-          open-write! close-write! reread! write!)
+          open-write! close-write! reread! write!
+          open-extend-write!)
   (import (prefix (a-d disk config) disk:)
           (prefix (a-d disk file-system) fs:)
           (a-d file sequential _7-sequential-file-last)
@@ -28,6 +29,7 @@
       (define file (make disk name hder bffr))
       (fs:mk disk name (disk:position hder))
       (first!  hder (disk:position bffr))
+      (last!   hder (disk:position bffr))
       (fs:next-bptr! bffr fs:null-block)
       (current! hder disk:block-ptr-size)
       (disk:write-block! hder)
@@ -40,6 +42,14 @@
       (define bffr (disk:read-block disk fptr))
       (define file (make disk name hder bffr))
       (current! hder disk:block-ptr-size)
+      file)
+
+    (define (open-extend-write! disk name)
+      (define bptr (fs:whereis disk name))
+      (define hder (disk:read-block disk bptr))
+      (define lptr (last hder))
+      (define bffr (disk:read-block disk lptr))
+      (define file (make disk name hder bffr))
       file)
  
     (define (reread! file)
@@ -82,6 +92,7 @@
                           (disk:write-block! bffr)
                           (disk:read-block fdsk (fs:next-bptr bffr)))))
       (buffer!  file next)
+      (last!    hder (disk:position next)) ; pas "last" pointer aan
       (current! hder disk:block-ptr-size)) ; skip "next" pointer
  
     (define (claim-bytes! file nmbr)

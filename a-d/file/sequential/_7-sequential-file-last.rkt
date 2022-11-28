@@ -14,6 +14,7 @@
 
 (define-library (sequential-file)
  (export make name delete! disk sequential-file? first first!
+         last last!
          header header! current current! buffer buffer!
          eof-tag eob-tag integer-tag decimal-tag natural-tag string-tag)
  (import (scheme base)
@@ -27,6 +28,8 @@
 
  (define frst-offs 0)
  (define curr-offs disk:block-ptr-size)
+ (define last-offs (+ curr-offs disk:block-ptr-size))
+
  
  (define (first hder)
    (disk:decode-fixed-natural  hder frst-offs disk:block-ptr-size))
@@ -36,7 +39,11 @@
    (disk:decode-fixed-natural  hder curr-offs disk:block-idx-size))
  (define (current! hder offs)
    (disk:encode-fixed-natural! hder curr-offs disk:block-idx-size offs))  
-
+ (define (last hder)
+   (disk:decode-fixed-natural  hder last-offs disk:block-ptr-size))
+ (define (last! hder bptr)
+   (disk:encode-fixed-natural! hder last-offs disk:block-ptr-size bptr))
+ 
  (define-record-type sequential-file
    (make d n h b)
    sequential-file?
