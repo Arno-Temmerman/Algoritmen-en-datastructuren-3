@@ -15,6 +15,7 @@
 (define-library (file-system)
   (export format! new-block delete-block delete-chain!
           write-meta-block! read-meta-block directory
+          slot-ctr
           next-bptr next-bptr! null-block? null-block filename-size
           mk ls rm whereis df)
   (import (scheme base)
@@ -47,23 +48,32 @@
       (disk:encode-fixed-natural! meta available-offset disk:block-ptr-size free))
  
     (define next-offset 0) 
+    (define slot-ctr-offset disk:block-ptr-size)																							
     (define slot-size   (+ filename-size disk:block-ptr-size))
+	
+    (define slot-ctr-size disk:block-idx-size) ; overschatting
+    ;(define slot-ctr-size (disk:natural-bytes nr-of-dir-slots)) dit zou correcter zijn maar werkt niet o.w.v. cyclic dependency
 
     (define (next-bptr blck)
       (disk:decode-fixed-natural blck next-offset disk:block-ptr-size))
     (define (next-bptr! blck bptr)
       (disk:encode-fixed-natural! blck next-offset disk:block-ptr-size bptr))
- 
+
+    (define (slot-ctr blck)
+      (disk:decode-fixed-natural blck slot-ctr-offset slot-ctr-size))
+    (define (slot-ctr! blck cnt)
+      (disk:encode-fixed-natural! blck slot-ctr-offset slot-ctr-size cnt))
+
     (define (dir-name/bptr! blck slot name bptr)
-      (define offn (+ disk:block-ptr-size (* slot slot-size)) )
-      (define offp (+ disk:block-ptr-size (* slot slot-size) filename-size))
+      (define offn (+ disk:block-ptr-size slot-ctr-size (* slot slot-size)) )
+      (define offp (+ disk:block-ptr-size slot-ctr-size (* slot slot-size) filename-size))
       (disk:encode-string! blck offn filename-size name)
       (disk:encode-fixed-natural! blck offp disk:block-ptr-size bptr))
     (define (dir-name blck slot)
-      (define offn (+ disk:block-ptr-size (* slot slot-size)))
+      (define offn (+ disk:block-ptr-size slot-ctr-size (* slot slot-size)))
       (disk:decode-string blck offn filename-size))
     (define (dir-bptr blck slot)
-      (define offp (+ disk:block-ptr-size (* slot slot-size) filename-size))
+      (define offp (+ disk:block-ptr-size slot-ctr-size (* slot slot-size) filename-size))
       (disk:decode-fixed-natural blck offp disk:block-ptr-size))   
  
     (define (null-block? bptr)
@@ -75,8 +85,8 @@
     (define (empty-slot? blck slot)
       (string=? sentinel-filename (dir-name blck slot)))
 
-    (define nr-of-dir-slots (quotient (- disk:block-size disk:block-ptr-size) slot-size))
- 
+    (define nr-of-dir-slots (quotient (- disk:block-size disk:block-ptr-size slot-ctr-size) slot-size))    
+	
     (define (at-end? blck slot)
       (= slot nr-of-dir-slots))
  
@@ -151,6 +161,7 @@
     (define (fresh-block! disk next!)
       (define next (new-block disk))
       (next-bptr! next null-block)
+      (slot-ctr! next 0)
       (do ((slot 0 (+ slot 1)))
         ((at-end? next slot)
          (next! next)
@@ -177,6 +188,7 @@
                                (disk:write-block! blck))))
                   ((empty-slot? blck slot)
                    (dir-name/bptr! blck slot name bptr)
+                   (slot-ctr! blck (+ (slot-ctr blck) 1))
                    (disk:write-block! blck))
                   (else
                    (loop-block (+ slot 1))))))))
@@ -203,6 +215,7 @@
                    (loop-block (+ slot 1) seen))
                   ((string=? name (dir-name blck slot))
                    (dir-name/bptr! blck slot sentinel-filename null-block)
+                   (slot-ctr! blck (- (slot-ctr blck) 1)) 
                    (disk:write-block! blck)
                    (if (not seen)
                        (maybe-delete-block! blck slot nxt!)))
