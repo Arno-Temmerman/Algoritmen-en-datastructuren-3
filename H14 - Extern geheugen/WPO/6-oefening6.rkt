@@ -51,12 +51,23 @@
 
 ; Oefening 6, deel (a): High level copy
 
-;;; TODO
+(define (high-level-copy disk file-name copy-name)
+  (let ((in-file  (in:open-read! disk file-name))
+        (out-file (out:new       disk copy-name)))
+  
+    (let loop ()
+      (if (in:has-more? in-file)
+          (begin (out:write! out-file (in:read in-file))
+                 (loop))))
+
+    (in:close-read!   in-file)
+    (out:close-write! out-file)
+    out-file))
 
 (newline)
-;(define f2 (high-level-copy d "file1" "file2"))
-;(stat d "file2")
-;(cat d "file2") (newline)
+(define f2 (high-level-copy d "file1" "file2"))
+(stat d "file2")
+(cat d "file2") (newline)
 
 ; Oefening 6, deel (b): Low level copy
 
