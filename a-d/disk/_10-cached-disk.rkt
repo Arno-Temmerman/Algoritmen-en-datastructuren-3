@@ -29,8 +29,6 @@
           (a-d scheme-tools)
           (prefix (a-d disk disk) disk:))
   (begin
- 
-    ;rename to their originals for transitive export
     (define real32 disk:real32)
     (define real64 disk:real64)
  
@@ -40,6 +38,25 @@
     (define block-idx-size disk:block-idx-size)
  
     (define cache-size 10)
+
+    (define cache-parts 3)
+    (define cache-part-size (quotient cache-size cache-parts))
+
+    (define (cache:part bptr) ; determine in which part of the cache a block should be put
+      (modulo bptr cache-parts))
+ 
+    (define (cache:in-last-part? bptr)
+      (= (cache:part bptr)
+         (- cache-parts 1)))
+
+    (define (cache:start-offs bptr) ; start-idx of part
+      (* cache-part-size (cache:part bptr)))
+ 
+    (define (cache:end-offs bptr) ; end-idx of part in cache, ensures last part goes until the end of the cache vector
+      (if (cache:in-last-part? bptr)
+          cache-size
+          (+ (cache:start-offs bptr)
+             cache-part-size)))
  
     (define (cache:new)
       (make-vector cache-size '()))
@@ -50,11 +67,11 @@
     (define (cache:put! cche indx blck)
       (vector-set! cche indx blck))
  
-    (define (cache:find-free-index cche)
+    (define (cache:find-free-index cche bptr start-offs end-offs)
       (define oldest-time (current-time))
       (define oldest-indx -1)
       (define (traverse indx)
-        (if (< indx cache-size)
+        (if (< indx end-offs) ; stop at the end of cache part
             (let 
                 ((blck (cache:get cche indx)))
               (if (null? blck)
@@ -70,18 +87,18 @@
             (if (negative? oldest-indx)
                 (error "cache full" cche)
                 oldest-indx)))
-      (traverse 0))
+      (traverse start-offs)) ; start at the start of cache part
  
-    (define (cache:find-block cche bptr)
+    (define (cache:find-block cche bptr start-offs end-offs)
       (define (position-matches? blck)
         (and (not (null? blck))
              (= (position blck) bptr)))
       (let traverse
-        ((indx 0)
-         (blck (cache:get cche 0)))
+        ((indx start-offs) ; start at the start of cache part
+         (blck (cache:get cche start-offs)))
         (cond ((position-matches? blck)
                blck)
-              ((< (+ indx 1) cache-size)
+              ((< (+ indx 1) end-offs) ; stop at the end of cache part
                (traverse (+ indx 1) 
                          (cache:get cche (+ indx 1))))
               (else
@@ -97,7 +114,7 @@
       (make-cdisk (cache:new) (disk:new name)))
  
     (define (mount name)
-      (make-cdisk (cache:new) (disk:mount name)))
+      (make-cdisk (cache:new) (disk:new name)))
  
     (define (name cdsk)
       (disk:name (real-disk cdsk)))
@@ -124,14 +141,17 @@
  
     (define (read-block cdsk bptr)
       (define cche (disk-cache cdsk))
-      (define blck (cache:find-block cche bptr))
+      (define start-offs (cache:start-offs bptr))
+      (define end-offs (cache:end-offs bptr))
+      (define blck (cache:find-block cche bptr start-offs end-offs))
       (if (null? blck)
-          (let* ((indx (cache:find-free-index cche))
-                 (cached-blck (cache:get cche indx)))     
-            (when (not (null? cached-blck))             
-              (if (dirty? cached-blck)                  
-                  (disk:write-block! (block cached-blck)))
-              (invalidate! cached-blck))               
+          (let*
+              ((indx (cache:find-free-index cche start-offs end-offs))
+               (blck (cache:get cche indx)))
+            (when (not (null? blck))
+              (if (dirty? blck)
+                  (disk:write-block! (block blck)))
+              (invalidate! blck))
             (set! blck (make-block cdsk (disk:read-block (real-disk cdsk) bptr)))
             (cache:put! cche indx blck)))
       (locked! blck #t)
