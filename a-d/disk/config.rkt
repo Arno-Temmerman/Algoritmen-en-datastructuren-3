@@ -29,7 +29,7 @@
  (import ;(a-d disk disk)
          ;(a-d disk cached-disk)
          ;(a-d disk cached-disk-wbwa)
-         (a-d disk _9-cached-disk-info) ; zie WPO
-         ;(Hoofdstuk14 Oplossingen cached-disk-wbwa-info) ; zie WPO
+         ;(a-d disk _9-cached-disk-info) ; zie WPO
+         (a-d disk _9-cached-disk-wbwa-info) ; zie WPO
          )
  )

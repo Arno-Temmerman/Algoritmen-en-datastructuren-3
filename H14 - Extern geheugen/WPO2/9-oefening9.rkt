@@ -6,7 +6,7 @@
         (scheme write)
         (scheme cxr)
         (prefix (a-d disk config) disk:) ; AAN TE PASSEN Zorg dat deze library de (Hoofdstuk14 Oplossingen cached-disk-info) library importeert!
-        (prefix (only (a-d disk _9-cached-disk-info) cache-info reset-cache-info!) disk:) ; We hebben hier enkel deze twee functies nodig
+        (prefix (only (a-d disk _9-cached-disk-wbwa-info) cache-info reset-cache-info!) disk:) ; We hebben hier enkel deze twee functies nodig
         (prefix (a-d disk file-system) fs:)
         (prefix (a-d file sequential output-file) out:)
         (prefix (a-d file sequential input-file) in:)
