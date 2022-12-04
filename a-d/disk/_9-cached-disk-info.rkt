@@ -29,7 +29,8 @@
           integer-bytes natural-bytes
           decode-real encode-real! 
           decode-string encode-string!
-          decode-bytes encode-bytes!)
+          decode-bytes encode-bytes!
+          cache-info reset-cache-info!)
   (import (scheme base)
           (a-d scheme-tools)
           (prefix (a-d disk disk) disk:))
@@ -86,16 +87,44 @@
                '()))))
  
     (define-record-type cdisk
-      (make-cdisk v d)
+      (make-cdisk v d rr er rw ew)
       disk?
       (v disk-cache)
-      (d real-disk))
+      (d real-disk)
+      (rr requested-reads  requested-reads!)    
+      (er effective-reads  effective-reads!)    
+      (rw requested-writes requested-writes!)  
+      (ew effective-writes effective-writes!))
+
+    (define (requested-reads++ cdsk)
+      (requested-reads! cdsk (+ (requested-reads cdsk) 1)))
+ 
+    (define (effective-reads++ cdsk)
+      (effective-reads! cdsk (+ (effective-reads cdsk) 1)))
+ 
+    (define (requested-writes++ cdsk)
+      (requested-writes! cdsk (+ (requested-writes cdsk) 1)))
+ 
+    (define (effective-writes++ cdsk)
+      (effective-writes! cdsk (+ (effective-writes cdsk) 1)))
+
+    (define (cache-info cdsk)
+      (list (requested-reads cdsk)
+            (effective-reads cdsk)
+            (requested-writes cdsk)
+            (effective-writes cdsk)))
+
+    (define (reset-cache-info! cdsk)
+      (requested-reads! cdsk 0)
+      (effective-reads! cdsk 0)
+      (requested-writes! cdsk 0)
+      (effective-writes! cdsk 0))
  
     (define (new name)
-      (make-cdisk (cache:new) (disk:new name)))
+      (make-cdisk (cache:new) (disk:new name)   0 0 0 0))
  
     (define (mount name)
-      (make-cdisk (cache:new) (disk:mount name)))
+      (make-cdisk (cache:new) (disk:mount name) 0 0 0 0))
  
     (define (name cdsk)
       (disk:name (real-disk cdsk)))
@@ -108,7 +137,8 @@
               (cond
                 ((not (null? blck))
                  (if (dirty? blck)
-                     (disk:write-block! (block blck)))))
+                     (begin (disk:write-block! (block blck))
+                            (effective-writes++ cdsk)))))
               (traverse (+ indx 1)))))
       (traverse 0)
       (disk:unmount (real-disk cdsk)))
@@ -129,6 +159,7 @@
           ; cache-blck is not null -> cache hit, do nothing
           )
       (dirty! blck #t)                   ; AANGEPAST no write, that's the whole point!
+      (requested-writes++ (disk blck))
       (time-stamp! blck (current-time))) ; TOEGEVOEGD
  
     (define (read-block cdsk bptr) ; read requested
@@ -139,13 +170,16 @@
                  (existing-blck (cache:get cche indx)))
             (if (and (not (null? existing-blck))
                      (dirty? existing-blck))                     ; AANGEPAST: if there is an existing block and it is dirty, write it back to disk
-                 (disk:write-block! (block existing-blck)))      ; AANGEPAST
+                (begin (disk:write-block! (block existing-blck))
+                       (effective-writes++ cdsk)))      ; AANGEPAST
             (set! blck (make-block cdsk (disk:read-block (real-disk cdsk) bptr))) ; read requested block from disk
+            (effective-reads++ cdsk)
             (cache:put! cche indx blck))                                          ; ... and store it in the cache
           ; blck is not null -> cache hit, do nothing
           )
       ; no more locking!
       (time-stamp! blck (current-time)) ; TOEGEVOEGD
+      (requested-reads++ cdsk)
       blck)
  
     (define-record-type cblock
