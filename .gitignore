@@ -21,6 +21,12 @@ bin/
 # Ignore dirs named `compiled`
 compiled/
 
+# Ignore dirs named `Oplossingen`
+Oplossingen/
+
+# Ignore dirs named `Code`
+Code/
+
 # Unignore all `.jar` in `bin` dir
 !*/bin/*.jar
 
