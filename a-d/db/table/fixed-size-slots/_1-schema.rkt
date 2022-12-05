@@ -118,6 +118,8 @@
  
     (define (position scma)
       (disk:position (block scma)))
+
+    (define max-attributes (quotient (- disk:block-size (* schema-nr-size 2) 1) 2))
  
     (define (new dsk atts)
       (define rsz (sum-of-sizes atts))
@@ -125,6 +127,10 @@
                             (+ (* rsz 8) 1)))
       (if (< cap 1)
           (error "tuples must fit in a block (new schema)" rsz))
+
+      (if (> (length atts) max-attributes)
+          (error "too many attributes"))
+      
       (let* ((blck (fs:new-block dsk))
              (scma (make blck)))
         (capacity!         scma cap)
