@@ -27,6 +27,9 @@ Oplossingen/
 # Ignore dirs named `Code`
 Code/
 
+# Ignore dirs named `Taak`
+Taak/
+
 # Unignore all `.jar` in `bin` dir
 !*/bin/*.jar
 
@@ -154,3 +157,7 @@ relative/path/to/dir/anotherfile
 **.[wW][aA][vV]
 **.[wW][mM][aA]
 **.[wW][vV]
+
+# Some particular files
+a-d/reverse.rkt
+H14 - Extern geheugen/list-to-vector.scm
