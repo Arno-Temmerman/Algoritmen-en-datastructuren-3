@@ -5,8 +5,8 @@
 
 (import (prefix (a-d disk config) disk:)
         (prefix (a-d disk file-system) unix:)
-        (prefix (Hoofdstuk16 Oplossingen table+) tbl:) 
-        (prefix (Hoofdstuk16 Oplossingen schema+) scma:)
+        (prefix (a-d db table fixed-size-slots _2-table) tbl:) 
+        (prefix (a-d db table fixed-size-slots schema) scma:)
         (a-d file constants)
         (scheme base)
         (scheme write)

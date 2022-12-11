@@ -16,13 +16,14 @@
   (export new open close! current current!
           drop! insert! delete! peek print
           set-current-to-first! set-current-to-next!
+          set-current-to-last! set-current-to-previous!
           schema name disk)
   (import (a-d file constants)
           (prefix (a-d disk config) disk:)
           (prefix (a-d disk file-system) fs:)
           (prefix (a-d db rcid) rcid:)
           (prefix (a-d db table fixed-size-slots schema) scma:)
-          (prefix (a-d db table fixed-size-slots node) node:)
+          (prefix (a-d db table fixed-size-slots _2-node) node:)
           (scheme base)
           (scheme write))
   (begin
@@ -39,7 +40,8 @@
     (define full-offset   0)
     (define last-offset   (+ full-offset disk:block-ptr-size))
     (define part-offset   (+ last-offset disk:block-ptr-size))
-    (define schema-offset (+ part-offset disk:block-ptr-size))
+    (define final-offset  (+ part-offset disk:block-ptr-size))
+    (define schema-offset (+ final-offset disk:block-ptr-size))
  
     (define (full tble)
       (define hder (header tble))
@@ -59,6 +61,12 @@
     (define (part! tble bptr)
       (define hder (header tble))
       (disk:encode-fixed-natural! hder part-offset disk:block-ptr-size bptr))
+    (define (final tble)
+      (define hder (header tble))
+      (disk:decode-fixed-natural hder final-offset disk:block-ptr-size))
+    (define (final!  tble bptr)
+      (define hder (header tble))
+      (disk:encode-fixed-natural! hder final-offset disk:block-ptr-size bptr))
     (define (schema-bptr tble)
       (define hder (header tble))
       (disk:decode-fixed-natural hder schema-offset disk:block-ptr-size))
@@ -76,6 +84,7 @@
       (full! tble fs:null-block)
       (last! tble fs:null-block)
       (part! tble fs:null-block)
+	  (final! tble fs:null-block)									  
       (schema-bptr! tble (scma:position scma))
       (disk:write-block! hder)
       (fs:mk disk name (disk:position hder))
@@ -100,7 +109,7 @@
           no-current
           (node:record bffr curr)))
  
-    (define (extract-node! tble first first! node) ; This procedure is not as clean as I hoped it to be (c.f. when/if/if)
+    (define (extract-node! tble first first! last last! node) ; This procedure is not as clean as I hoped it to be (c.f. when/if/if)
       (define next-bptr (node:next node))
       (define prev-bptr (node:previous node))
       (node:next!     node fs:null-block)
@@ -121,18 +130,21 @@
       (if (= (last tble) (node:position node))
           (last! tble prev-bptr)))
 
-    (define (insert-node! tble first first! node)
+    (define (insert-node! tble first first! last last! node)
       (define frst-bptr (first tble))
+	  (define final-bptr (final tble))										 
       (if (not (fs:null-block? frst-bptr))
           (let ((next (node:read (schema tble) frst-bptr)))
             (node:previous! next (node:position node))
             (node:next! node frst-bptr)
             (node:write! next)))
-      (first! tble (node:position node)))
+      (first! tble (node:position node))
+	  (if (fs:null-block? final-bptr)
+          (final! tble (node:position node))))
 
     (define (insert-part! tble node)
       (define last-bptr (last tble))
-      (insert-node! tble part part! node)
+      (insert-node! tble part part! final final! node)
       (if (not (fs:null-block? last-bptr)) ; there are nodes in full-list
           (let ((prev (node:read (schema tble) last-bptr)))
             (node:next! prev (node:position node))
@@ -142,14 +154,12 @@
     (define (insert-full! tble node)
       (define last-bptr (last tble))
       (define part-bptr (part tble))
-      (insert-node! tble full full! node)
-      (when (fs:null-block? last-bptr) ; first node to be inserted in full-list
-        (last! tble (node:position node))
+      (insert-node! tble full full! last last! node)
         (if (not (fs:null-block? part-bptr)) ; there are still nodes in part-list
             (let ((next (node:read (schema tble) part-bptr)))   
               (node:next! node (node:position next))
               (node:previous! next (node:position node))
-              (node:write! next)))))
+              (node:write! next))))
  
     (define (insert! tble tupl)
       (define scma (schema tble))
@@ -162,7 +172,7 @@
       (define free (find-free-slot node -1))
       (node:record! node free tupl)
       (when (node:all-occupied? node)
-        (extract-node! tble part part! node)
+        (extract-node! tble part part! final final! node)
         (insert-full!  tble node))
       (node:write!  node)
       (buffer!      tble node)
@@ -176,12 +186,12 @@
       (node:clear-slot! node (rcid:slot rcid))
       (cond ((node:all-free? node)
              (if was-full?
-                 (extract-node! tble full full! node)
-                 (extract-node! tble part part! node))
+                 (extract-node! tble full full! last last node)
+                 (extract-node! tble part part! final final! node))
              (node:delete! node))
             (else
              (when was-full?
-               (extract-node! tble full full! node)
+               (extract-node! tble full full! last last! node)
                (insert-part! tble node))
              (node:write! node)))
       (buffer! tble '())
@@ -245,6 +255,16 @@
                cntr)
               (else
                (loop (+ cntr 1))))))
+     
+    (define (find-prev-occupied-slot node strt)
+      (let loop
+        ((cntr (- strt 1)))
+        (cond ((= -1 cntr)
+               -1)
+              ((node:slot-occupied? node cntr)
+               cntr)
+              (else
+               (loop (- cntr 1))))))
  
     (define (find-free-slot node strt)
       (define scma (node:schema node))
@@ -270,6 +290,20 @@
             (buffer! tble bffr)
             (slot!   tble curr)
             done)))
+
+    (define (set-current-to-last! tble)
+      (define scma (schema tble))
+      (if (and (fs:null-block? (full tble))
+               (fs:null-block? (part tble)))
+          no-current
+          (let* ((fptr (if (fs:null-block? (final tble))
+                           (last tble)
+                           (final tble)))
+                 (bffr (node:read scma fptr))
+                 (curr (find-prev-occupied-slot bffr (scma:capacity scma))))
+            (buffer! tble bffr)
+            (slot!   tble curr)
+            done)))
  
     (define (set-current-to-next! tble)
       (define scma (schema tble))
@@ -292,11 +326,33 @@
                    (buffer! tble '())
                    (slot!   tble -1)
                    no-current)))))
+
+    (define (set-current-to-previous! tble)
+      (define scma (schema tble))
+      (define bffr (buffer tble))
+      (define curr (slot   tble))
+      (if (null? bffr)
+          no-current
+          (let ((indx (find-prev-occupied-slot bffr curr)))
+            (cond ((not (= indx -1))
+                   (buffer! tble bffr)
+                   (slot!   tble indx)
+                   done)
+                  ((not (fs:null-block? (node:previous bffr)))
+                   (let* ((prev (node:read scma (node:previous bffr)))
+                          (indx  (find-prev-occupied-slot prev (scma:capacity scma))))
+                     (buffer! tble prev)
+                     (slot!   tble indx)
+                     done))
+                  (else
+                   (buffer! tble '())
+                   (slot!   tble -1)
+                   no-current)))))
  
     (define (current tble)
       (define bffr (buffer tble))
       (define curr (slot   tble))
-      (if (null? bffr)
+      (if (null? curr)
           no-current
           (rcid:new (node:position bffr) curr)))
  
