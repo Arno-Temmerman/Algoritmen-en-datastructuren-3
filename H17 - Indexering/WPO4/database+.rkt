@@ -233,7 +233,17 @@
                                      #f)))
       (if (null? indx)
           (error "No index for this attribute" attr) ; You can leave this error
-          (error "not implemented yet")))
+          (let ((set-current-to-first/last!    (if (not asc?) btree:set-current-to-first! btree:set-current-to-last!))
+                (set-current-to-next/previous! (if (not asc?) btree:set-current-to-next!  btree:set-current-to-previous!)))
+            (set-current-to-first/last! indx)
+            (let loop ((result '()))
+              (let ((current (btree:peek indx)))
+                (if (not (eq? current no-current))
+                    (let ((current-tuple (begin (tbl:current! tble (cdr current))
+                                                (tbl:peek tble))))
+                      (set-current-to-next/previous! indx)
+                      (loop (cons current-tuple result)))
+                    result))))))
 
     (define (select-from/range/incl dbse tble attr lova hiva) ; TO COMPLETE
       (define scma (tbl:schema tble))
