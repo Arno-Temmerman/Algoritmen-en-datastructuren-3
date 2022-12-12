@@ -203,7 +203,20 @@
           (build-path (tree-root tree))))
 
     (define (set-current-to-last! tree) ; TO COMPLETE
-      (error "implement me"))
+      (define ntyp (node-type tree))
+      (define stck (path tree))
+      (define (build-path bptr)
+        (define node (node:read ntyp bptr))
+        (cond ((node:leaf? node)
+               (path:push! stck node (node:size node)) ; uiterst rechtse rcid
+               done)
+              (else
+               (path:push! stck node (node:size node)) ; uiterst rechtse bptr
+               (build-path (node:pointer node (node:size node)))))) ; uiterst rechtse bptr
+      (path:clear! stck)  
+      (if (fs:null-block? (tree-root tree))
+          no-current
+          (build-path (tree-root tree))))
  
     (define (peek tree) 
       (define stck (path tree))
