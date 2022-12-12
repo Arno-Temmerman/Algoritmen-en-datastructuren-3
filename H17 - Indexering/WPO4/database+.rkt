@@ -185,8 +185,17 @@
                                      #f)))
    
       (if (null? indx)        ; index on 'attr' found, or search the tuple file sequentially
-          (error "not implemented yet")
-          (error "not implemented yet"))
+          (let ((smallest-key '()))
+            (for-all-tuples tble (lambda (tple rcid)
+                                   (let ((current-key (list-ref tple attr)))
+                                     (when (or (null? smallest-key)
+                                               (<<? current-key smallest-key))
+                                       (set! smallest-key current-key)
+                                       (set! rslt tple))))))
+          ; Geval 2: er is wel een index voor attr => uiterst linkse key in de btre is het kleinste element
+          (when (eq? (btree:set-current-to-first! indx) done) ; zet current naar de uiterst linkse key
+            (tbl:current! tble (cdr (btree:peek indx))) ; car = key; cdr = rcid
+            (set! rslt (tbl:peek tble))))
       rslt)
 
     (define (select-from/max dbse tble attr) ; TO COMPLETE Copy/paste from select-from/min
@@ -201,9 +210,19 @@
                                      (set! indx idx)
                                      #f)))
    
-      (if (null? indx)        ; index on 'attr' found, or search the tuple file sequentially
-          (error "not implemented yet")
-          (error "not implemented yet"))
+      (if (null? indx)
+          ; Geval 1: er is geen index voor attr => lijst doorlopen en het grootste bijhouden
+          (let ((biggest-key '()))
+            (for-all-tuples tble (lambda (tple rcid)
+                                   (let ((current-key (list-ref tple attr)))
+                                     (when (or (null? biggest-key)
+                                               (>>? current-key biggest-key))
+                                       (set! biggest-key current-key)
+                                       (set! rslt tple))))))
+          ; Geval 2: er is wel een index voor attr => uiterst rechtse key in de btree is het grootste element
+          (when (eq? (btree:set-current-to-last! indx) done) ; zet current naar de uiterst rechtse key
+            (tbl:current! tble (cdr (btree:peek indx))) ; car = key; cdr = rcid
+            (set! rslt (tbl:peek tble))))
       rslt)
 
     (define (select-from/all/ordered dbse tble attr asc?) ; TO COMPLETE
