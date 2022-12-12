@@ -184,7 +184,35 @@
           (backtrack 0)))
 
     (define (set-current-to-previous! tree) ; TO COMPLETE
-      (error "implement me"))
+      (define stck (path tree))
+      (define ntyp (node-type tree))
+      
+      (define (at-begin? node slot)
+        (if (node:leaf? node)
+            (= slot 1)
+            (= slot 0)))
+      
+      (define (backtrack level)
+        (define node (path:node stck))
+        (define slot (path:slot stck))
+        (path:pop! stck)
+        (if (at-begin? node slot)
+            (if (path:empty? stck)
+                not-found
+                (backtrack (+ level 1)))
+            (retreat node (- slot 1) level)))
+      
+      (define (retreat node slot level)
+        (path:push! stck node slot)
+        (if (= 0 level) ; leaf node
+            done
+            (let*
+                ((bptr (node:pointer node slot))
+                 (prev-node (node:read ntyp bptr)))
+              (retreat prev-node (node:size prev-node) (- level 1)))))
+      (if (path:empty? stck)
+          no-current
+          (backtrack 0)))
  
     (define (set-current-to-first! tree)
       (define ntyp (node-type tree))
