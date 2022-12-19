@@ -15,7 +15,6 @@
 (define-library (multiway-merge-sort)
   (export sort!)
   (import (scheme base)
-          (rename (a-d sorting internal comparative quicksort-m3-bounded) (sort quicksort))
           (prefix (a-d heap standard) heap:)
           (prefix (a-d file sequential input-file) in:)
           (prefix (a-d file sequential output-file) out:)
@@ -24,7 +23,7 @@
   (begin
    
     (define rlen 10)
-    (define irun (make-vector rlen))
+    (define irun (heap:new rlen <))
  
     (define (read-run! file)
       (let loop
@@ -32,13 +31,13 @@
         (cond ((or (= indx rlen) (not (in:has-more? file)))
                indx)
               (else
-               (vector-set! irun indx (in:read file))
+               (heap:insert! irun (in:read file))
                (loop (+ indx 1))))))
  
     (define (write-run! ofcr imax)
       (let loop
         ((indx 0))
-        (ofcr:write! ofcr (vector-ref irun indx))
+        (ofcr:write! ofcr (heap:delete! irun))
         (if (< (+ indx 1) imax)
             (loop (+ indx 1)))))
  
@@ -110,7 +109,6 @@
         ((indx 0))
         (let ((nmbr (read-run! inpt)))
           (when (not (= nmbr 0))
-            (quicksort irun nmbr <<?)
             (write-run! (output files indx) nmbr)
             (ofcr:new-run! (output files indx))
             (loop (next-file indx p)))))
