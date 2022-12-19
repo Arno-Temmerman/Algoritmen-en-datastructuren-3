@@ -34,12 +34,16 @@
                (heap:insert! irun (in:read file))
                (loop (+ indx 1))))))
  
-    (define (write-run! ofvr imax)
+    (define (write-run! ofvr file)
       (let loop
         ((indx 0))
-        (ofvr:write! ofvr (heap:delete! irun))
-        (if (< (+ indx 1) imax)
-            (loop (+ indx 1)))))
+        (let ((element (heap:delete! irun)))
+          (ofvr:write! ofvr element)
+          (if (and (in:has-more? file)
+                   (not (< (in:read file) element)))
+              (heap:insert! irun (in:read file)))
+          (if (not (heap:empty? irun))
+              (loop (+ indx 1))))))
  
     (define (make-aux-bundle disks)
       (define p (floor (/ (vector-length disks) 2)))
@@ -108,7 +112,7 @@
         (let ((nmbr (read-run! inpt)))
           (when (not (= nmbr 0))
             (ofvr:new-run! (output files indx))
-            (write-run! (output files indx) nmbr)
+            (write-run! (output files indx) inpt)
             (loop (next-file indx p)))))
       (swap-files!? files))
   
