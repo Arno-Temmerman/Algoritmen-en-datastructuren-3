@@ -18,8 +18,8 @@
           (prefix (a-d heap standard) heap:)
           (prefix (a-d file sequential input-file) in:)
           (prefix (a-d file sequential output-file) out:)
-          (prefix (a-d sorting external outputfile-with-counted-runs) ofcr:)
-          (prefix (a-d sorting external inputfile-with-counted-runs) ifcr:))
+          (prefix (a-d sorting external outputfile-with-varying-runs) ofvr:)
+          (prefix (a-d sorting external inputfile-with-varying-runs) ifvr:))
   (begin
    
     (define rlen 10)
@@ -34,10 +34,10 @@
                (heap:insert! irun (in:read file))
                (loop (+ indx 1))))))
  
-    (define (write-run! ofcr imax)
+    (define (write-run! ofvr imax)
       (let loop
         ((indx 0))
-        (ofcr:write! ofcr (heap:delete! irun))
+        (ofvr:write! ofvr (heap:delete! irun))
         (if (< (+ indx 1) imax)
             (loop (+ indx 1)))))
  
@@ -48,22 +48,22 @@
       (define name "aux-")
       (do ((i 0 (+ i 1)))
         ((= i p))
-        (vector-set! out i (ofcr:new (vector-ref disks i) 
+        (vector-set! out i (ofvr:new (vector-ref disks i) 
                                      (string-append name (number->string i))
-                                     rlen))
-        (vector-set! in i (ofcr:new (vector-ref disks (+ p i))
+                                     +inf.0))
+        (vector-set! in i (ofvr:new (vector-ref disks (+ p i))
                                     (string-append name (number->string (+ p i)))
-                                    rlen))
-        (ofcr:reread! (vector-ref in i) rlen)) ; we need input files in "in" (c.f. rewrite! in next phase)!
+                                    +inf.0))
+        (ofvr:reread! (vector-ref in i))) ; we need input files in "in" (c.f. rewrite! in next phase)!
       (make-bundle p in out))
  
     (define (delete-aux-bundle! files)
       (for-each-input files
                       (lambda (file indx)
-                        (ifcr:delete! file)))
+                        (ifvr:delete! file)))
       (for-each-output files
                        (lambda (file indx)
-                         (ofcr:delete! file))))
+                         (ofvr:delete! file))))
  
     (define (make-bundle p in out)
       (cons p (cons in out)))
@@ -91,14 +91,12 @@
         (set! input  output)
         (set! output tmp))
       (define p (order files))
-      (define old-run-length (ofcr:run-length (output files 0)))
-      (define new-run-length (* p old-run-length))
       (for-each-output files (lambda (outp indx)
-                               (ofcr:reread! outp old-run-length)))
+                               (ofvr:reread! outp)))
       (for-each-input files (lambda (inpt indx)
-                              (ifcr:rewrite! inpt new-run-length)))
+                              (ifvr:rewrite! inpt)))
       (switch-refs)
-      (ifcr:has-more? (input files 1)))
+      (ifvr:has-more? (input files 1)))
  
     (define (next-file indx p)
       (modulo (+ indx 1) p))
@@ -109,36 +107,37 @@
         ((indx 0))
         (let ((nmbr (read-run! inpt)))
           (when (not (= nmbr 0))
+            (ofvr:new-run! (output files indx))
             (write-run! (output files indx) nmbr)
-            (ofcr:new-run! (output files indx))
             (loop (next-file indx p)))))
       (swap-files!? files))
   
     (define (collect! files inpt)
       (define last (input files 0))
       (in:rewrite! inpt)
+      (ifvr:new-run! last)
       (let loop
-        ((rcrd (ifcr:read last)))
+        ((rcrd (ifvr:read last)))
         (out:write! inpt rcrd)
-        (if (ifcr:run-has-more? last)
-            (loop (ifcr:read last))))
+        (if (ifvr:run-has-more? last)
+            (loop (ifvr:read last))))
       (out:close-write! inpt))
 
     (define (read-from-files? heap files)
       (for-each-input 
        files 
        (lambda (file indx)
-         (when (ifcr:has-more? file)
-           (ifcr:new-run! file)
-           (heap:insert! heap (cons indx (ifcr:read file))))))
+         (when (ifvr:has-more? file)
+           (ifvr:new-run! file)
+           (heap:insert! heap (cons indx (ifvr:read file))))))
       (not (heap:empty? heap)))
 
     (define (serve heap files)
       (define el (heap:delete! heap))
       (define indx (car el))
       (define rcrd (cdr el))
-      (if (ifcr:run-has-more? (input files indx))
-          (heap:insert! heap (cons indx (ifcr:read (input files indx)))))
+      (if (ifvr:run-has-more? (input files indx))
+          (heap:insert! heap (cons indx (ifvr:read (input files indx)))))
       rcrd)
  
     (define (merge! files <<?)
@@ -148,12 +147,13 @@
       (let merge-files
         ((out-idx 0))
         (cond ((read-from-files? heap files)
+               (ofvr:new-run! (output files out-idx))
                (let merge-p-runs
                  ((rcrd (serve heap files)))
-                 (ofcr:write! (output files out-idx) rcrd)
+                 (ofvr:write! (output files out-idx) rcrd)
                  (if (not (heap:empty? heap))
                      (merge-p-runs (serve heap files))))
-               (ofcr:new-run! (output files out-idx))
+               (ofvr:new-run! (output files out-idx))
                (merge-files (next-file out-idx (order files))))
               ((swap-files!? files)
                (merge-files 0)))))
